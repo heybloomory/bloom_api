@@ -5,9 +5,9 @@ const AlbumSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     memoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Memory", index: true },
 
-    // ✅ 2-level albums
+    // ✅ 3-level hierarchy: Album (1) → Sub-Album (2) → Sub-Album (3). Max depth = 3.
     parentId: { type: mongoose.Schema.Types.ObjectId, ref: "Album", default: null, index: true },
-    level: { type: Number, enum: [1, 2], default: 1 },
+    level: { type: Number, enum: [1, 2, 3], default: 1 },
 
     title: { type: String, trim: true, required: true },
     description: { type: String, trim: true, default: "" },

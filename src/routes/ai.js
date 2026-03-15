@@ -1,4 +1,6 @@
 import express from "express";
+import { optionalAuth, requireAuth } from "../middleware/auth.js";
+import { getPool } from "../config/postgres.js";
 
 const router = express.Router();
 
@@ -133,9 +135,10 @@ async function callOpenAI({ input }) {
   return { reply: text.trim() || "Sorry, I couldn’t generate a reply." };
 }
 
-router.post("/ask", rateLimit, async (req, res, next) => {
+router.post("/ask", rateLimit, optionalAuth, async (req, res, next) => {
   try {
     const message = (req.body?.message || "").toString().trim();
+    const conversationId = (req.body?.conversationId || "").toString().trim() || null;
     if (!message) {
       return res.status(400).json({ reply: "Please type a question." });
     }
@@ -149,7 +152,77 @@ router.post("/ask", rateLimit, async (req, res, next) => {
     }
 
     const out = await callOpenAI({ input: message });
+
+    // Persist to PostgreSQL when user is authenticated and PG is available
+    const pool = getPool();
+    const userId = req.user?._id?.toString?.();
+    if (pool && userId) {
+      const client = await pool.connect();
+      try {
+        let convId = conversationId;
+        if (!convId) {
+          const createConv = await client.query(
+            "INSERT INTO ai_conversations (user_id) VALUES ($1) RETURNING id",
+            [userId]
+          );
+          convId = createConv.rows[0].id;
+        } else {
+          const check = await client.query(
+            "SELECT id FROM ai_conversations WHERE id = $1 AND user_id = $2",
+            [convId, userId]
+          );
+          if (check.rows.length === 0) convId = null;
+        }
+        if (convId) {
+          await client.query(
+            "INSERT INTO ai_messages (conversation_id, role, content) VALUES ($1, $2, $3)",
+            [convId, "user", message]
+          );
+          await client.query(
+            "INSERT INTO ai_messages (conversation_id, role, content) VALUES ($1, $2, $3)",
+            [convId, "assistant", out.reply]
+          );
+          await client.query(
+            "UPDATE ai_conversations SET updated_at = now() WHERE id = $1",
+            [convId]
+          );
+          return res.json({ reply: out.reply, conversationId: convId });
+        }
+      } finally {
+        client.release();
+      }
+    }
+
     return res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** GET /api/ai/conversations/:id - get conversation history (requires auth, PostgreSQL) */
+router.get("/conversations/:id", requireAuth, async (req, res, next) => {
+  try {
+    const conversationId = req.params.id;
+    const userId = req.user._id.toString();
+    const pool = getPool();
+    if (!pool) return res.status(503).json({ message: "Conversation history not available" });
+
+    const client = await pool.connect();
+    try {
+      const conv = await client.query(
+        "SELECT id FROM ai_conversations WHERE id = $1 AND user_id = $2",
+        [conversationId, userId]
+      );
+      if (conv.rows.length === 0) return res.status(404).json({ message: "Conversation not found" });
+
+      const messages = await client.query(
+        "SELECT id, role, content, created_at FROM ai_messages WHERE conversation_id = $1 ORDER BY created_at ASC",
+        [conversationId]
+      );
+      return res.json({ success: true, messages: messages.rows });
+    } finally {
+      client.release();
+    }
   } catch (e) {
     next(e);
   }

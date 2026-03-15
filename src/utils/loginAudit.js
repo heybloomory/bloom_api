@@ -32,3 +32,18 @@ export async function recordLogin({ req, user }) {
 
   await user.save();
 }
+
+/** Build login metadata from request (for use with PostgreSQL login recording). */
+export function getLoginMeta(req) {
+  const ip = getClientIp(req);
+  const ua = req.headers["user-agent"] || "";
+  const parsed = new UAParser(ua).getResult();
+  const device =
+    `${parsed.device.vendor || ""} ${parsed.device.model || ""}`.trim() ||
+    `${parsed.os.name || ""} ${parsed.os.version || ""}`.trim() ||
+    `${parsed.browser.name || ""} ${parsed.browser.version || ""}`.trim() ||
+    "unknown";
+  const geo = ip ? geoip.lookup(ip) : null;
+  const location = geo ? { country: geo.country, region: geo.region, city: geo.city, ll: geo.ll } : null;
+  return { ip, userAgent: ua, device, location };
+}

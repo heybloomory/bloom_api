@@ -1,12 +1,15 @@
 import "dotenv/config";
+import http from "http";
 import app from "./app.js";
 import { connectDB } from "./config/db.js";
+import { connectPostgres } from "./config/postgres.js";
+import { connectRedis, getRedis } from "./config/redis.js";
+import { attachChatServer } from "./websocket/chatServer.js";
 
 const PORT = process.env.PORT || 4000;
 
 async function boot() {
-  // Allow running the API without MongoDB for local dev / AI-only testing.
-  // Set SKIP_DB=true in .env to bypass DB connection.
+  // MongoDB (existing primary until migration complete)
   const skipDb = String(process.env.SKIP_DB || "").toLowerCase() === "true";
   if (!skipDb) {
     try {
@@ -20,7 +23,18 @@ async function boot() {
   } else {
     console.log("ℹ️  SKIP_DB=true → skipping MongoDB connection");
   }
-  app.listen(PORT, "0.0.0.0", () => {
+
+  // PostgreSQL (optional; for migration and new features: chat, AI history)
+  await connectPostgres();
+
+  // Redis (cache, BullMQ, timeline, WebSocket scaling)
+  connectRedis();
+  if (!getRedis()) console.log("Redis not configured");
+
+  const httpServer = http.createServer(app);
+  attachChatServer(httpServer);
+
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 bloom_api listening on http://0.0.0.0:${PORT}`);
   });
 }

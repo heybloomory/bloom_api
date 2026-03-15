@@ -2,9 +2,10 @@ import { z } from "zod";
 
 export const createMediaSchema = z.object({
   type: z.enum(["image", "video"]),
-  url: z.string().url(),
+  url: z.string().url().optional(),
+  videoId: z.string().optional(),
   key: z.string().optional(),
-  thumbUrl: z.string().url().optional(),
+  thumbUrl: z.union([z.string().url(), z.literal("")]).optional(),
   albumId: z.string().optional(),
   memoryId: z.string().optional(),
   width: z.number().int().positive().optional(),

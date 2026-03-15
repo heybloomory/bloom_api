@@ -7,7 +7,8 @@ const MediaSchema = new mongoose.Schema(
     memoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Memory", index: true },
 
     type: { type: String, enum: ["image", "video"], required: true },
-    url: { type: String, required: true },
+    url: { type: String, default: "" },           // required for images (BunnyCDN); empty for video
+    videoId: { type: String, default: "" },       // Bunny Stream video ID when type === "video"
     key: { type: String, default: "" },
     thumbUrl: { type: String, default: "" },
 

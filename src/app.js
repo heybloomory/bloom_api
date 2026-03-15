@@ -10,6 +10,8 @@ import memoryRoutes from "./routes/memories.js";
 import albumRoutes from "./routes/albums.js";
 import mediaRoutes from "./routes/media.js";
 import aiRoutes from "./routes/ai.js";
+import searchRoutes from "./routes/search.js";
+import timelineRoutes from "./routes/timeline.js";
 
 import { notFound } from "./middleware/notFound.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -54,6 +56,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/memories", memoryRoutes);
 app.use("/api/albums", albumRoutes);
 app.use("/api/media", mediaRoutes);
+app.use("/api/search", searchRoutes);
+app.use("/api/timeline", timelineRoutes);
 
 // BloomoryAI Assistant (Ask Me Anything)
 app.use("/api/ai", aiRoutes);
