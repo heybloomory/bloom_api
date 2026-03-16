@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "worker": "node src/workers/mediaWorker.js",
     "migrate:mongo-to-pg": "node scripts/migrateMongoToPostgres.js",
-    "verify:migration": "node scripts/verifyMigration.js"
+    "verify:migration": "node scripts/verifyMigration.js",
+    "migrate": "node scripts/runMigrations.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

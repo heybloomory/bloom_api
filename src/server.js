@@ -36,6 +36,7 @@ async function boot() {
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 bloom_api listening on http://0.0.0.0:${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
