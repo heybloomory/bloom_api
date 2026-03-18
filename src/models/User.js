@@ -34,6 +34,9 @@ const UserSchema = new mongoose.Schema(
         email: String,
       },
     },
+
+    // Profile completion (DOB is required in Flutter onboarding)
+    dateOfBirth: { type: Date },
     // avatarUrl: { type: String },
     isEmailVerified: { type: Boolean, default: false },
   },

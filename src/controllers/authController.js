@@ -4,11 +4,31 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import { HttpError } from "../utils/httpError.js";
-import { registerSchema, loginSchema, loginEmailSchema, sendOtpSchema } from "../validators/auth.js";
+import {
+  registerSchema,
+  loginSchema,
+  loginEmailSchema,
+  sendOtpSchema,
+  verifyOtpSchema,
+  sendEmailOtpSchema,
+  verifyEmailOtpSchema,
+  completeProfileSchema,
+} from "../validators/auth.js";
 import * as userRepository from "../repositories/userRepository.js";
 import * as loginEventRepository from "../repositories/loginEventRepository.js";
 
 const usePostgres = () => String(process.env.USE_POSTGRES || "").toLowerCase() === "true";
+
+// In-memory OTP stores for dev onboarding.
+// NOTE: For production, replace with a proper persistence layer (e.g., Redis + SMS/email provider).
+const phoneOtpStore = new Map(); // phone -> { otp, expiresAt }
+const emailOtpStore = new Map(); // email -> { otp, expiresAt }
+
+const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function isExpired(expiresAt) {
+  return !expiresAt || Date.now() > expiresAt;
+}
 
 function signToken(userId) {
   return jwt.sign(
@@ -20,7 +40,23 @@ function signToken(userId) {
 
 function toUserResponse(user) {
   const id = user._id ?? user.id;
-  return { id, email: user.email, phone: user.phone, name: user.name, plan: user.plan };
+  const dob =
+    user.dateOfBirth instanceof Date
+      ? user.dateOfBirth.toISOString().slice(0, 10)
+      : user.dateOfBirth
+        ? String(user.dateOfBirth)
+        : user?.providers?.dob
+          ? String(user.providers.dob)
+          : null;
+
+  return {
+    id,
+    email: user.email,
+    phone: user.phone,
+    name: user.name,
+    dateOfBirth: dob,
+    plan: user.plan,
+  };
 }
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -238,12 +274,51 @@ export async function checkCountry(req, res) {
 export async function sendOtp(req, res, next) {
   try {
     const { mobile } = sendOtpSchema.parse(req.body);
+
     // OTP is a placeholder until you integrate an SMS provider (Twilio, MSG91, etc.).
     // For dev, return success and include OTP ONLY outside production.
     const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const payload = { success: true, message: "OTP sent (demo). Integrate SMS provider for production." };
+    const expiresAt = Date.now() + OTP_TTL_MS;
+    phoneOtpStore.set(mobile, { otp, expiresAt });
+
+    const payload = {
+      success: true,
+      message: "OTP sent (demo). Integrate SMS provider for production.",
+    };
     if (process.env.NODE_ENV !== "production") payload.otp = otp;
     res.json(payload);
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function verifyOtp(req, res, next) {
+  try {
+    const { phone, otp } = verifyOtpSchema.parse(req.body);
+
+    const record = phoneOtpStore.get(phone);
+    if (!record || isExpired(record.expiresAt)) {
+      throw new HttpError(401, "OTP expired");
+    }
+    if (String(record.otp) !== String(otp)) {
+      throw new HttpError(401, "Invalid OTP");
+    }
+
+    phoneOtpStore.delete(phone);
+
+    let user;
+    if (usePostgres()) {
+      user = await userRepository.findUserByPhone(phone);
+      if (!user) {
+        user = await userRepository.createUser({ phone, name: "", email: null, isEmailVerified: false });
+      }
+    } else {
+      user = await User.findOne({ phone }).exec();
+      if (!user) user = await User.create({ phone, name: "" });
+    }
+
+    const token = signToken(user.id ?? user._id);
+    res.json({ success: true, token, user: toUserResponse(user) });
   } catch (e) {
     next(e);
   }
@@ -290,6 +365,95 @@ export async function loginEmail(req, res, next) {
       token,
       user: toUserResponse(user),
     });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function sendEmailOtp(req, res, next) {
+  try {
+    const { email } = sendEmailOtpSchema.parse(req.body);
+    const normalizedEmail = email.toLowerCase();
+
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = Date.now() + OTP_TTL_MS;
+    emailOtpStore.set(normalizedEmail, { otp, expiresAt });
+
+    const payload = {
+      success: true,
+      message: "Email OTP sent (demo). Integrate provider for production.",
+    };
+    if (process.env.NODE_ENV !== "production") payload.otp = otp;
+    res.json(payload);
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function verifyEmailOtp(req, res, next) {
+  try {
+    const { email, otp } = verifyEmailOtpSchema.parse(req.body);
+    const normalizedEmail = email.toLowerCase();
+
+    const record = emailOtpStore.get(normalizedEmail);
+    if (!record || isExpired(record.expiresAt)) {
+      throw new HttpError(401, "OTP expired");
+    }
+    if (String(record.otp) !== String(otp)) {
+      throw new HttpError(401, "Invalid OTP");
+    }
+
+    emailOtpStore.delete(normalizedEmail);
+
+    let user;
+    if (usePostgres()) {
+      user = await userRepository.findUserByEmail(normalizedEmail);
+      if (!user) {
+        user = await userRepository.createUser({
+          email: normalizedEmail,
+          phone: null,
+          name: "",
+          isEmailVerified: true,
+        });
+      }
+    } else {
+      user = await User.findOne({ email: normalizedEmail }).exec();
+      if (!user) {
+        user = await User.create({ email: normalizedEmail, name: "", isEmailVerified: true });
+      }
+    }
+
+    const token = signToken(user.id ?? user._id);
+    res.json({ success: true, token, user: toUserResponse(user) });
+  } catch (e) {
+    next(e);
+  }
+}
+
+export async function completeProfile(req, res, next) {
+  try {
+    const data = completeProfileSchema.parse(req.body);
+    // requireAuth already injected req.user; for postgres the user will come from userRepository
+    const user = req.user;
+
+    // Mongo update
+    if (!usePostgres()) {
+      user.name = data.name;
+      if (data.email) user.email = data.email.toLowerCase();
+      user.dateOfBirth = new Date(data.dateOfBirth);
+      await user.save();
+      return res.json({ success: true, user: toUserResponse(user) });
+    }
+
+    // Postgres: store DOB inside providers JSON (no dedicated column in schema yet)
+    const dobStr = new Date(data.dateOfBirth).toISOString().slice(0, 10);
+    const updated = await userRepository.updateUser(user.id ?? user._id, {
+      name: data.name,
+      email: data.email ? data.email.toLowerCase() : undefined,
+      providers: { ...(user.providers || {}), dob: dobStr },
+    });
+
+    return res.json({ success: true, user: toUserResponse({ ...updated, dateOfBirth: dobStr }) });
   } catch (e) {
     next(e);
   }
