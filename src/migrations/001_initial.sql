@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS media (
   url             TEXT,
   thumbnail_url   TEXT NOT NULL DEFAULT '',
   video_id        TEXT,
+  storage_key     TEXT,
+  original_file_name TEXT NOT NULL DEFAULT '',
   size_bytes      BIGINT,
   width           INT,
   height          INT,

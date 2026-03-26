@@ -31,6 +31,8 @@ export async function createMedia(req, res, next) {
         type: data.type,
         url: data.url || "",
         videoId: data.videoId || "",
+        key: data.key || "",
+        originalFileName: data.originalFileName || "",
         thumbnailUrl: data.thumbUrl || "",
         width: data.width,
         height: data.height,
@@ -86,6 +88,9 @@ export async function uploadMedia(req, res, next) {
     const mime = file.mimetype || "application/octet-stream";
     const isVideo = mime.startsWith("video/");
     const type = (req.body.type || (isVideo ? "video" : "image")).toString();
+    const originalFileName = String(
+      req.body.originalFileName || file.originalname || ""
+    ).trim();
     if (!["image", "video"].includes(type)) throw new HttpError(400, "type must be image or video");
 
     const ts = Date.now();
@@ -96,6 +101,7 @@ export async function uploadMedia(req, res, next) {
       type,
       sizeBytes: file.size,
       mimeType: mime,
+      originalFileName,
     };
 
     if (type === "image") {

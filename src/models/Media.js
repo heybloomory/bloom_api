@@ -10,6 +10,7 @@ const MediaSchema = new mongoose.Schema(
     url: { type: String, default: "" },           // required for images (BunnyCDN); empty for video
     videoId: { type: String, default: "" },       // Bunny Stream video ID when type === "video"
     key: { type: String, default: "" },
+    originalFileName: { type: String, default: "" },
     thumbUrl: { type: String, default: "" },
 
     width: { type: Number },

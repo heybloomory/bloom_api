@@ -5,6 +5,7 @@ export const createMediaSchema = z.object({
   url: z.string().url().optional(),
   videoId: z.string().optional(),
   key: z.string().optional(),
+  originalFileName: z.string().optional(),
   thumbUrl: z.union([z.string().url(), z.literal("")]).optional(),
   albumId: z.string().optional(),
   memoryId: z.string().optional(),

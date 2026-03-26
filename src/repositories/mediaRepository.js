@@ -11,6 +11,8 @@ export async function createMedia(data) {
     type,
     url = "",
     videoId = "",
+    key = "",
+    originalFileName = "",
     thumbnailUrl = "",
     sizeBytes,
     width,
@@ -19,8 +21,8 @@ export async function createMedia(data) {
     durationSec,
   } = data;
   const res = await pool.query(
-    `INSERT INTO media (user_id, album_id, memory_id, type, url, video_id, thumbnail_url, size_bytes, width, height, mime_type, duration_sec)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `INSERT INTO media (user_id, album_id, memory_id, type, url, video_id, storage_key, original_file_name, thumbnail_url, size_bytes, width, height, mime_type, duration_sec)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
      RETURNING *`,
     [
       userId,
@@ -29,6 +31,8 @@ export async function createMedia(data) {
       type,
       type === "video" ? (url || null) : url,
       type === "video" ? (videoId || null) : null,
+      key || null,
+      originalFileName || null,
       thumbnailUrl,
       sizeBytes ?? null,
       width ?? null,

@@ -25,6 +25,7 @@ const phoneOtpStore = new Map(); // phone -> { otp, expiresAt }
 const emailOtpStore = new Map(); // email -> { otp, expiresAt }
 
 const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const STATIC_OTP = "123456";
 
 function isExpired(expiresAt) {
   return !expiresAt || Date.now() > expiresAt;
@@ -54,6 +55,10 @@ function toUserResponse(user) {
     email: user.email,
     phone: user.phone,
     name: user.name,
+    profileCompleted:
+      user.profileCompleted === true ||
+      user?.providers?.profileCompleted === true ||
+      String(user?.name || "").trim().isNotEmpty,
     dateOfBirth: dob,
     plan: user.plan,
   };
@@ -275,17 +280,16 @@ export async function sendOtp(req, res, next) {
   try {
     const { mobile } = sendOtpSchema.parse(req.body);
 
-    // OTP is a placeholder until you integrate an SMS provider (Twilio, MSG91, etc.).
-    // For dev, return success and include OTP ONLY outside production.
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    // Temporary static OTP for testing both mobile/email flows.
+    const otp = STATIC_OTP;
     const expiresAt = Date.now() + OTP_TTL_MS;
     phoneOtpStore.set(mobile, { otp, expiresAt });
 
     const payload = {
       success: true,
-      message: "OTP sent (demo). Integrate SMS provider for production.",
+      message: "OTP sent (static test mode).",
     };
-    if (process.env.NODE_ENV !== "production") payload.otp = otp;
+    payload.otp = otp;
     res.json(payload);
   } catch (e) {
     next(e);
@@ -375,15 +379,15 @@ export async function sendEmailOtp(req, res, next) {
     const { email } = sendEmailOtpSchema.parse(req.body);
     const normalizedEmail = email.toLowerCase();
 
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    const otp = STATIC_OTP;
     const expiresAt = Date.now() + OTP_TTL_MS;
     emailOtpStore.set(normalizedEmail, { otp, expiresAt });
 
     const payload = {
       success: true,
-      message: "Email OTP sent (demo). Integrate provider for production.",
+      message: "Email OTP sent (static test mode).",
     };
-    if (process.env.NODE_ENV !== "production") payload.otp = otp;
+    payload.otp = otp;
     res.json(payload);
   } catch (e) {
     next(e);

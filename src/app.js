@@ -53,6 +53,7 @@ app.get("/health", (req, res) => res.json({ ok: true }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/user", userRoutes);
 app.use("/api/memories", memoryRoutes);
 app.use("/api/albums", albumRoutes);
 app.use("/api/media", mediaRoutes);

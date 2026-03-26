@@ -34,8 +34,21 @@ const UserSchema = new mongoose.Schema(
         email: String,
       },
     },
+    deviceTokens: [{ type: String, trim: true }],
+    notificationStats: {
+      lastNotificationAt: { type: Date },
+      notificationsToday: { type: Number, default: 0 },
+      lastNotificationDay: { type: String, default: "" },
+    },
+    engagementStats: {
+      timelineViews: { type: Number, default: 0 },
+      uploads: { type: Number, default: 0 },
+      lastTimelineViewAt: { type: Date },
+      lastUploadAt: { type: Date },
+    },
 
     // Profile completion (DOB is required in Flutter onboarding)
+    profileCompleted: { type: Boolean, default: false },
     dateOfBirth: { type: Date },
     // avatarUrl: { type: String },
     isEmailVerified: { type: Boolean, default: false },
