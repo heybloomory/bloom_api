@@ -27,11 +27,15 @@ const trackEngagementSchema = z.object({
 const usePostgres = () => String(process.env.USE_POSTGRES || "").toLowerCase() === "true";
 
 function normalizeUser(user = {}) {
-  const name = String(user?.name || "").trim();
+  const plain =
+    user && typeof user.toObject === "function"
+      ? user.toObject()
+      : { ...(user || {}) };
+  const name = String(plain?.name || "").trim();
   const profileCompleted =
-    user?.profileCompleted === true || user?.providers?.profileCompleted === true || name.isNotEmpty;
+    plain?.profileCompleted === true || plain?.providers?.profileCompleted === true || name.isNotEmpty;
   return {
-    ...(user || {}),
+    ...plain,
     name,
     profileCompleted,
   };
@@ -39,28 +43,65 @@ function normalizeUser(user = {}) {
 
 export async function updateMe(req, res, next) {
   try {
+    console.log("🔥 HIT PROFILE UPDATE API");
+    console.log("Headers:", req.headers);
+    console.log("Body:", req.body);
+    console.log("User from token:", req.user);
     const data = updateMeSchema.parse(req.body);
+    if (!req.user || !(req.user.id || req.user._id)) {
+      console.log("❌ USER NOT FOUND IN TOKEN");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
     const uid = req.user._id ?? req.user.id;
     console.log("[profile] updateMe:start", { uid, hasName: Boolean(data.name), profileCompleted: data.profileCompleted });
     if (usePostgres()) {
       const latest = await userRepository.findUserById(uid);
+      if (!latest) return res.status(404).json({ success: false, message: "User not found" });
+      console.log("Fetched user:", latest);
+      console.log("Before update:", latest);
       const providers = {
         ...(latest?.providers || {}),
-        ...(data.profileCompleted != null ? { profileCompleted: data.profileCompleted } : {}),
+        profileCompleted: true,
       };
       const user = await userRepository.updateUser(uid, {
-        ...data,
+        name: data.name ?? latest.name,
+        avatarUrl: data.avatarUrl,
+        plan: data.plan,
         providers,
       });
       if (!user) throw new Error("User not found");
-      const normalized = normalizeUser(user);
-      console.log("[profile] updateMe:done", { uid, name: normalized.name, profileCompleted: normalized.profileCompleted });
+      const verifyUser = await userRepository.findUserById(uid);
+      const normalized = normalizeUser({ ...verifyUser, profileCompleted: true });
+      console.log("Saved user:", user);
+      console.log("DB AFTER SAVE:", verifyUser);
+      console.log("After update:", normalized);
       return res.json({ success: true, user: normalized });
     }
-    const user = await User.findByIdAndUpdate(req.user._id, data, { new: true }).select("-passwordHash");
+
+    const user = await User.findById(req.user.id ?? req.user._id).select("-passwordHash");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log("Fetched user:", user);
+    console.log("Before update:", user);
+
+    user.name = data.name ?? user.name;
+    user.profileCompleted = true;
+    if (data.avatarUrl != null) user.avatarUrl = data.avatarUrl;
+    if (data.plan != null) user.plan = data.plan;
+    const savedUser = await user.save();
+    console.log("Saved user:", savedUser);
+    const verifyUser = await User.findById(req.user.id ?? req.user._id).select("-passwordHash");
+    console.log("DB AFTER SAVE:", verifyUser);
+
     const normalized = normalizeUser(user);
-    console.log("[profile] updateMe:done", { uid, name: normalized.name, profileCompleted: normalized.profileCompleted });
-    res.json({ success: true, user: normalized });
+    console.log("After update:", normalized);
+
+    return res.json({
+      success: true,
+      user: normalized,
+    });
   } catch (e) {
     next(e);
   }

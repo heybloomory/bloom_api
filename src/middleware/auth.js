@@ -17,6 +17,8 @@ export async function requireAuth(req, res, next) {
       : await User.findById(payload.sub).select("-passwordHash");
     if (!user) throw new HttpError(401, "Invalid token user");
 
+    if (!user.id && user._id) user.id = String(user._id);
+    console.log("User ID from token:", user?.id);
     req.user = user;
     next();
   } catch (e) {
